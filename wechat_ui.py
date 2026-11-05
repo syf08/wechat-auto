@@ -241,8 +241,8 @@ def _favorite_sticker_controls(panel: auto.Control) -> list[auto.Control]:
     return items
 
 
-def _sticker_controls_bottom_up(controls: list[auto.Control]) -> list[auto.Control]:
-    """按“最底下一行开始、每行从左到右、再逐行向上”的顺序排列收藏格。"""
+def _sticker_controls_reverse_grid(controls: list[auto.Control]) -> list[auto.Control]:
+    """按“最底下一行开始、每行从右到左、再逐行向上”的反向顺序排列收藏格。"""
     rows: list[list[auto.Control]] = []
     for ctrl in sorted(
         controls,
@@ -258,7 +258,13 @@ def _sticker_controls_bottom_up(controls: list[auto.Control]) -> list[auto.Contr
 
     ordered: list[auto.Control] = []
     for row in reversed(rows):
-        ordered.extend(sorted(row, key=lambda item: item.BoundingRectangle.left))
+        ordered.extend(
+            sorted(
+                row,
+                key=lambda item: item.BoundingRectangle.left,
+                reverse=True,
+            )
+        )
     return ordered
 
 
@@ -314,19 +320,20 @@ def _find_favorite_sticker_control(
     grid: auto.Control,
     index: int,
 ) -> auto.Control:
-    """按从底部向上的 0 起始序号定位贴纸格；只滚动和读取，不点击贴纸。"""
+    """按从右下角向左、再逐行向上的 0 起始序号定位；只滚动和读取。"""
     g = grid.BoundingRectangle
     center_x = (g.left + g.right) // 2
     center_y = (g.top + g.bottom) // 2
 
-    # 新收藏的贴纸会插到最上方，因此从底部开始计数，旧序号不会整体后移。
+    # 新收藏会插到前部，旧贴纸向右、再向下移动。从右下角反向计数
+    # 与这个插入方向一致，可减少从顶部新增贴纸时已有序号的偏移。
     for _ in range(12):
         post_wheel(panel_hwnd, center_x, center_y, -3)
         time.sleep(0.02)
     time.sleep(0.3)
 
     current_controls = _favorite_sticker_controls(panel)
-    current_ordered = _sticker_controls_bottom_up(current_controls)
+    current_ordered = _sticker_controls_reverse_grid(current_controls)
     current_ids = _sticker_control_runtime_ids(current_ordered)
     current_base = 0
     for _step in range(80):
@@ -356,7 +363,7 @@ def _find_favorite_sticker_control(
             candidate = _favorite_sticker_controls(panel)
             if not candidate:
                 continue
-            candidate_ordered = _sticker_controls_bottom_up(candidate)
+            candidate_ordered = _sticker_controls_reverse_grid(candidate)
             candidate_ids = _sticker_control_runtime_ids(candidate_ordered)
             candidate_top = min(ctrl.BoundingRectangle.top for ctrl in candidate)
             if candidate_ids != previous_ids or candidate_top > previous_top + 1:
@@ -369,7 +376,7 @@ def _find_favorite_sticker_control(
         stable_controls = _favorite_sticker_controls(panel)
         if stable_controls:
             next_controls = stable_controls
-            next_ordered = _sticker_controls_bottom_up(stable_controls)
+            next_ordered = _sticker_controls_reverse_grid(stable_controls)
             next_ids = _sticker_control_runtime_ids(next_ordered)
 
         shift = _sticker_control_shift(previous_ids, next_ids)
@@ -386,17 +393,17 @@ def _find_favorite_sticker_control(
             if next_top > previous_top + 1:
                 # 控件集合未变，但内容仍在向下移动；继续等待上一行进入 UIA 树。
                 current_controls = next_controls
-                current_ordered = _sticker_controls_bottom_up(next_controls)
+                current_ordered = _sticker_controls_reverse_grid(next_controls)
                 continue
             break
         current_base += shift
         current_controls = next_controls
-        current_ordered = _sticker_controls_bottom_up(next_controls)
+        current_ordered = _sticker_controls_reverse_grid(next_controls)
         current_ids = next_ids
 
     raise RuntimeError(
         f"按收藏序号 {index} 没有找到贴纸。请确认序号从 0 开始，"
-        "从收藏面板最底部开始、每行从左到右，再逐行向上编号。"
+        "从收藏面板右下角开始、每行从右到左，再逐行向上编号。"
     )
 
 
@@ -1030,7 +1037,7 @@ class ChatWindow:
         """发送一张“自定义表情”收藏贴纸。
 
         微信打开表情面板时会把该弹层切到前台。发送结束后会自动把前台还给
-        调用前的窗口。``index`` 是从收藏面板最底部开始、逐行向上的序号。
+        调用前的窗口。``index`` 是从收藏面板右下角开始、向左再逐行向上的序号。
         """
         if not isinstance(index, int) or index < 0:
             raise ValueError("贴纸 index 必须是非负整数")

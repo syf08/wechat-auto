@@ -116,7 +116,7 @@ def parse_sticker_catalog(text: str) -> tuple[StickerEntry, ...]:
     """解析配置窗口中的贴纸目录。
 
     每行格式：ID | 适用语义 | 收藏序号。
-    收藏序号从面板最底部开始、每行从左到右，再逐行向上。
+    收藏序号从面板右下角开始、每行从右到左，再逐行向上。
     空白行和以 # 开头的注释会被忽略。
     """
     entries: list[StickerEntry] = []
